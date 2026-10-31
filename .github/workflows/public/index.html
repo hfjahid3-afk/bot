@@ -1,0 +1,254 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PLS DONATE Cloud</title>
+
+<style>
+* { box-sizing: border-box; }
+
+body {
+  background: #10131d;
+  color: white;
+  font-family: Arial, sans-serif;
+  padding: 20px;
+}
+
+.card {
+  max-width: 450px;
+  margin: 20px auto;
+  background: #1d2333;
+  border-radius: 18px;
+  padding: 25px;
+  text-align: center;
+}
+
+h1 { color: #8c9eff; }
+
+.profile {
+  background: #292f42;
+  padding: 20px;
+  border-radius: 12px;
+  margin: 20px 0;
+}
+
+.profile img {
+  width: 100px;
+  border-radius: 50%;
+}
+
+input {
+  width: 100%;
+  padding: 13px;
+  margin: 10px 0;
+  border-radius: 8px;
+  border: 0;
+}
+
+button {
+  padding: 12px;
+  margin: 5px;
+  border: 0;
+  border-radius: 8px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.start { background: #43d9a3; }
+.stop { background: #ff6464; }
+.claim { background: #8c9eff; }
+.join { background: #43d9a3; width: 100%; }
+
+#timer {
+  font-size: 38px;
+  margin: 20px;
+}
+
+a { color: #8c9eff; }
+</style>
+</head>
+
+<body>
+<div class="card">
+
+<h1>PLS DONATE</h1>
+<p>Cloud AFK Dashboard</p>
+
+<div class="profile" id="profile">
+Loading Roblox account...
+</div>
+
+<hr>
+
+<h3>Game Settings</h3>
+
+<input id="gameInput" type="url"
+placeholder="Paste Roblox game link">
+
+<button onclick="saveGame()">SAVE GAME LINK</button>
+<button class="join" onclick="joinGame()">
+JOIN WITH OFFICIAL ROBLOX CLIENT
+</button>
+
+<p id="gameMessage">Loading game link...</p>
+
+<hr>
+
+<h3>AFK Monitor</h3>
+
+<p id="status">Checking server...</p>
+<div id="timer">00:00:00</div>
+<p id="stand">Stand: Not claimed</p>
+
+<button class="start"
+onclick="action('/api/start')">START MONITOR</button>
+
+<button class="stop"
+onclick="action('/api/stop')">STOP MONITOR</button>
+
+<button class="claim"
+onclick="action('/api/stand')">MARK STAND CLAIMED</button>
+
+<p style="color:#999;font-size:12px">
+Monitoring only. Does not control the Roblox client.
+</p>
+
+</div>
+
+<script>
+async function loadProfile() {
+  const box = document.getElementById("profile");
+
+  try {
+    const r = await fetch("/api/profile");
+    if (!r.ok) throw new Error();
+
+    const user = await r.json();
+
+    const img = document.createElement("img");
+    img.src = user.avatar || "";
+    img.alt = "Roblox avatar";
+
+    const name = document.createElement("h3");
+    name.textContent = user.displayName;
+
+    const username = document.createElement("p");
+    username.textContent = "@" + user.username;
+
+    const link = document.createElement("a");
+    link.href = user.profile;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.textContent = "View Roblox Profile";
+
+    box.replaceChildren(img, name, username, link);
+
+  } catch {
+    box.textContent = "Unable to load profile";
+  }
+}
+
+async function loadGame() {
+  try {
+    const r = await fetch("/api/game");
+    const data = await r.json();
+
+    document.getElementById("gameInput").value =
+      data.gameLink;
+  } catch {
+    document.getElementById("gameMessage").textContent =
+      "Unable to load game settings";
+  }
+}
+
+async function saveGame() {
+  const link = document.getElementById("gameInput").value;
+
+  try {
+    const r = await fetch("/api/game", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({link})
+    });
+
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error);
+
+    document.getElementById("gameMessage").textContent =
+      "Game link saved successfully";
+  } catch (e) {
+    document.getElementById("gameMessage").textContent =
+      e.message;
+  }
+}
+
+function joinGame() {
+  try {
+    const url = new URL(
+      document.getElementById("gameInput").value
+    );
+
+    if (
+      !["roblox.com", "www.roblox.com"].includes(url.hostname) ||
+      !url.pathname.startsWith("/games/")
+    ) throw new Error();
+
+    window.open(url.href, "_blank", "noopener,noreferrer");
+
+  } catch {
+    document.getElementById("gameMessage").textContent =
+      "Invalid Roblox game link";
+  }
+}
+
+async function action(endpoint) {
+  try {
+    await fetch(endpoint, {method: "POST"});
+    await update();
+  } catch {
+    document.getElementById("status").textContent =
+      "Server unavailable";
+  }
+}
+
+function formatTime(n) {
+  const h = String(Math.floor(n / 3600)).padStart(2, "0");
+  const m = String(Math.floor(n % 3600 / 60)).padStart(2, "0");
+  const s = String(n % 60).padStart(2, "0");
+  return `${h}:${m}:${s}`;
+}
+
+async function update() {
+  try {
+    const r = await fetch("/api/status");
+    if (!r.ok) throw new Error();
+
+    const data = await r.json();
+
+    document.getElementById("status").textContent =
+      data.active ? "🟢 Monitor running" : "⚪ Monitor stopped";
+
+    document.getElementById("timer").textContent =
+      formatTime(data.uptime);
+
+    document.getElementById("stand").textContent =
+      data.standClaimed
+        ? "Stand: Manually marked claimed"
+        : "Stand: Not claimed";
+
+  } catch {
+    document.getElementById("status").textContent =
+      "🔴 Disconnected";
+  }
+}
+
+loadProfile();
+loadGame();
+update();
+
+setInterval(update, 3000);
+</script>
+</body>
+</html>
